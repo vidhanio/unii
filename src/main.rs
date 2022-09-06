@@ -49,7 +49,7 @@ enum CourseSubcommand {
 fn main() {
     let args = Arguments::parse();
 
-    let config = match (args.directory, args.config_file) {
+    let _config = match (args.directory, args.config_file) {
         (Some(directory), _) => Config::from_dir(directory),
         (_, Some(config_file)) => Config::from_file(config_file).unwrap(),
         (None, None) => {
