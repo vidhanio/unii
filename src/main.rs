@@ -46,15 +46,6 @@ enum CourseSubcommand {
     List,
 }
 
-impl CourseSubcommand {
-    const fn code(&self) -> Option<&Code> {
-        match self {
-            Self::Create { code, .. } | Self::Delete { code } => Some(code),
-            Self::List => None,
-        }
-    }
-}
-
 fn main() {
     let args = Arguments::parse();
 
@@ -62,47 +53,34 @@ fn main() {
         (Some(directory), _) => Config::from_dir(directory),
         (_, Some(config_file)) => Config::from_file(config_file).unwrap(),
         (None, None) => {
-            let config_file = config::DEFAULT_CONFIG_PATH;
-            create_dir_all(
-                config_file
-                    .parent()
-                    .expect("default config should have parent"),
-            )
-            .expect("creating directories should not fail");
+            create_dir_all(config::DEFAULT_CONFIG_PATH.parent().unwrap()).unwrap();
 
-            if !config_file.exists() {
-                fs::write(&*config_file, "").expect("creating config should not fail");
+            if !config::DEFAULT_CONFIG_PATH.exists() {
+                fs::write(&*config::DEFAULT_CONFIG_PATH, "").unwrap();
             }
 
-            Config::from_file(config_file).expect("reading config should not fail")
+            Config::from_file(&*config::DEFAULT_CONFIG_PATH).unwrap()
         }
     };
 
+    // debug
     match args.subcommand {
-        Subcommand::Course(subcommand) => {
-            match subcommand {
-                CourseSubcommand::Create {
-                    code,
-                    name,
-                    description,
-                } => {
-                    let mut course = Course::new(code);
+        Subcommand::Course(CourseSubcommand::Create {
+            code,
+            name,
+            description,
+        }) => {
+            let course = Course::new(code)
+                .with_name(name.unwrap_or_else(|| "Untitled".to_string()))
+                .with_description(description.unwrap_or_else(|| "No description".to_string()));
 
-                    if let Some(name) = name {
-                        course.set_name(name);
-                    }
-
-                    if let Some(description) = description {
-                        course.set_description(description);
-                    }
-                }
-                CourseSubcommand::Delete { code } => {
-                    println!("Deleting course with code {}", code);
-                }
-                CourseSubcommand::List => {
-                    println!("Listing courses");
-                }
-            };
+            println!("{:#?}", course);
+        }
+        Subcommand::Course(CourseSubcommand::Delete { code }) => {
+            println!("{:#?}", code);
+        }
+        Subcommand::Course(CourseSubcommand::List) => {
+            println!("List");
         }
     }
 }
