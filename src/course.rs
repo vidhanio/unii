@@ -1,5 +1,6 @@
 use std::{
     fmt::{self, Display, Formatter},
+    path::PathBuf,
     str::FromStr,
 };
 
@@ -109,6 +110,7 @@ pub struct Course {
     description: Option<String>,
 }
 
+// Functional implementation
 impl Course {
     /// Create a new course.
     #[must_use]
@@ -172,6 +174,17 @@ impl Course {
     /// Clear the course description.
     pub fn clear_description(&mut self) {
         self.description = None;
+    }
+}
+
+// File implementation
+impl From<Course> for PathBuf {
+    fn from(course: Course) -> Self {
+        let mut path = Self::new();
+        path.push(course.code().to_string());
+        path.set_extension("md");
+
+        path
     }
 }
 
