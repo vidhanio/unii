@@ -7,10 +7,13 @@ use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+/// An error that can occur when creating a config.
 #[derive(Error, Debug)]
 pub enum Error {
+    /// An io error occurred.
     #[error("{0}")]
     Io(#[from] std::io::Error),
+    /// A toml error occurred.
     #[error("{0}")]
     Toml(#[from] toml::de::Error),
 }

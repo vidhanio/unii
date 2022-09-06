@@ -85,9 +85,9 @@ impl FromStr for Code {
 }
 
 /// An error that can occur when parsing a course code.
-#[derive(Debug, Copy, Clone, Error, PartialEq, Eq)]
+#[derive(Error, Debug, Copy, Clone, PartialEq, Eq)]
 pub enum CodeError {
-    /// The course code is too short.
+    /// The code is not long enough.
     InvalidLength,
     /// The course code has an invalid year.
     InvalidYear,
@@ -110,7 +110,6 @@ pub struct Course {
     description: Option<String>,
 }
 
-// Functional implementation
 impl Course {
     /// Create a new course.
     #[must_use]
@@ -177,7 +176,6 @@ impl Course {
     }
 }
 
-// File implementation
 impl From<Course> for PathBuf {
     fn from(course: Course) -> Self {
         let mut path = Self::new();
