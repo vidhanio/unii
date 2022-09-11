@@ -1,190 +1,179 @@
-use std::{
-    fmt::{self, Display, Formatter},
-    path::PathBuf,
-    str::FromStr,
-};
+use std::{fs, io, path::PathBuf};
 
-use thiserror::Error;
+use serde::{Deserialize, Serialize};
+use url::Url;
 
-/// A course year.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Year {
-    /// First year.
-    First,
-    /// Second year.
-    Second,
-    /// Third year.
-    Third,
-    /// Fourth year.
-    Fourth,
-    /// Other year.
-    Other(u32),
-}
-
-impl From<u32> for Year {
-    fn from(year: u32) -> Self {
-        match year {
-            1 => Self::First,
-            2 => Self::Second,
-            3 => Self::Third,
-            4 => Self::Fourth,
-            _ => Self::Other(year),
-        }
-    }
-}
-
-impl From<Year> for u32 {
-    fn from(year: Year) -> Self {
-        match year {
-            Year::First => 1,
-            Year::Second => 2,
-            Year::Third => 3,
-            Year::Fourth => 4,
-            Year::Other(year) => year,
-        }
-    }
-}
-
-impl Display for Year {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{}", u32::from(*self))
-    }
-}
-
-/// A course code.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Code {
-    /// The year of the course.
-    pub year: Year,
-    /// The rest of the course code.
-    pub rest: String,
-}
-
-impl Display for Code {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{}{}", self.year, self.rest)
-    }
-}
-
-impl FromStr for Code {
-    type Err = CodeError;
-
-    fn from_str(s: &str) -> Result<Self, CodeError> {
-        let mut chars = s.chars();
-        let year = chars
-            .next()
-            .ok_or(CodeError::InvalidLength)?
-            .to_string()
-            .parse::<u32>()
-            .map_err(|_| CodeError::InvalidYear)?
-            .into();
-        let rest = chars.collect::<String>();
-
-        Ok(Self { year, rest })
-    }
-}
-
-/// An error that can occur when parsing a course code.
-#[derive(Error, Debug, Copy, Clone, PartialEq, Eq)]
-pub enum CodeError {
-    /// The code is not long enough.
-    InvalidLength,
-    /// The course code has an invalid year.
-    InvalidYear,
-}
-
-impl Display for CodeError {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        match self {
-            Self::InvalidLength => write!(f, "invalid length"),
-            Self::InvalidYear => write!(f, "invalid year"),
-        }
-    }
-}
+use crate::{config::Config, Error, Result};
 
 /// A course.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Course {
-    code: Code,
-    name: Option<String>,
-    description: Option<String>,
+    code: String,
+    information: Information,
 }
 
 impl Course {
     /// Create a new course.
-    #[must_use]
-    pub const fn new(code: Code) -> Self {
-        Self {
-            code,
-            name: None,
-            description: None,
+    ///
+    /// # Errors
+    ///
+    /// This will error if creating the directory fails.
+    pub fn create(config: &Config, code: &str, information: Option<Information>) -> Result<Self> {
+        if config.directory.join(code).exists() {
+            Err(Error::CourseAlreadyExists(code.into()))
+        } else {
+            config
+                .course_code_regex
+                .as_ref()
+                .map(|regex| {
+                    regex.is_match(code).then_some(()).ok_or_else(|| {
+                        Error::CourseCodeDidNotMatchRegex {
+                            code: code.into(),
+                            regex: regex.to_string(),
+                        }
+                    })
+                })
+                .transpose()?;
+
+            let course = Self {
+                code: code.into(),
+                information: information.unwrap_or_default(),
+            };
+
+            course.write(config).map(|_| course)
         }
     }
 
-    /// Add a name to the course.
-    #[allow(clippy::missing_const_for_fn)]
-    #[must_use]
-    pub fn with_name(mut self, name: String) -> Self {
-        self.name = Some(name);
-        self
+    /// Open an existing course.
+    ///
+    /// # Errors
+    ///
+    /// This will error if the course does not exist.
+    pub fn open(config: &Config, code: &str) -> Result<Option<Self>> {
+        let path = config.directory.join(code);
+
+        Ok(if path.exists() {
+            Some(Self {
+                code: code.into(),
+                information: toml::from_str(&fs::read_to_string(path.join("information.toml"))?)?,
+            })
+        } else {
+            None
+        })
     }
 
-    /// Add a description to the course.
-    #[allow(clippy::missing_const_for_fn)]
-    #[must_use]
-    pub fn with_description(mut self, description: String) -> Self {
-        self.description = Some(description);
-        self
+    /// Opens a course, or creates it if it does not exist.
+    ///
+    /// # Errors
+    ///
+    /// This will error if opening or creating the course fails.
+    pub fn open_or_create(
+        config: &Config,
+        code: &str,
+        information: Option<Information>,
+    ) -> Result<Self> {
+        Self::open(config, code)?.map_or_else(|| Self::create(config, code, information), Ok)
     }
 
-    /// Get the course code.
+    /// Get the path to the course.
     #[must_use]
-    pub const fn code(&self) -> &Code {
+    pub fn path(&self, config: &Config) -> PathBuf {
+        config.directory.join(&self.code)
+    }
+
+    /// Write the course to the filesystem.
+    ///
+    /// Note that this will overwrite the course if it already exists.
+    ///
+    /// # Errors
+    ///
+    /// This will error if writing the course fails.
+    fn write(&self, config: &Config) -> Result<()> {
+        fs::create_dir_all(self.path(config))?;
+
+        self.write_information(config)
+    }
+
+    /// Delete the course.
+    ///
+    /// # Errors
+    ///
+    /// This will error if deleting the directory fails.
+    pub fn delete(self, config: &Config) -> Result<()> {
+        fs::remove_dir_all(self.path(config)).map_err(Into::into)
+    }
+
+    /// Get the course's code.
+    #[must_use]
+    pub fn code(&self) -> &str {
         &self.code
     }
 
-    /// Get the course name.
+    /// Get the course's information.
     #[must_use]
-    pub const fn name(&self) -> Option<&String> {
-        self.name.as_ref()
+    pub const fn information(&self) -> &Information {
+        &self.information
     }
 
-    /// Get the course description.
+    /// Get the path to the information file.
     #[must_use]
-    pub const fn description(&self) -> Option<&String> {
-        self.description.as_ref()
+    pub fn information_path(&self, config: &Config) -> PathBuf {
+        self.path(config).join("information.toml")
     }
 
-    /// Set the course name.
-    pub fn set_name(&mut self, name: String) {
-        self.name = Some(name);
+    /// Write the course's information to the information file.
+    ///
+    /// # Errors
+    ///
+    /// This will error if writing the file or serializing the information fails.
+    fn write_information(&self, config: &Config) -> Result<()> {
+        fs::write(
+            self.information_path(config),
+            toml::to_string(&self.information)?,
+        )
+        .map_err(Into::into)
     }
 
-    /// Set the course description.
-    pub fn set_description(&mut self, description: String) {
-        self.description = Some(description);
+    /// Set the course's information.
+    ///
+    /// # Errors
+    ///
+    /// This will error if writing the file or serializing the information fails.
+    pub fn set_information(&mut self, config: &Config, information: Information) -> Result<()> {
+        self.information = information;
+
+        self.write_information(config)
     }
 
-    /// Clear the course name.
-    pub fn clear_name(&mut self) {
-        self.name = None;
-    }
+    /// List all courses.
+    ///
+    /// # Errors
+    ///
+    /// This will error if reading the directory fails.
+    pub fn list(config: &Config) -> Result<impl Iterator<Item = Result<Self>> + '_> {
+        fs::read_dir(&config.directory)
+            .map(|i| {
+                i.map(|entry| {
+                    let entry = entry?;
+                    let file_name = entry.file_name();
+                    let code = file_name.to_string_lossy();
 
-    /// Clear the course description.
-    pub fn clear_description(&mut self) {
-        self.description = None;
+                    Self::open_or_create(config, &code, None)
+                })
+            })
+            .map_err(Into::into)
     }
 }
 
-impl From<Course> for PathBuf {
-    fn from(course: Course) -> Self {
-        let mut path = Self::new();
-        path.push(course.code().to_string());
-        path.set_extension("md");
+/// Information about a course.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct Information {
+    /// The course's name.
+    pub name: Option<String>,
 
-        path
-    }
+    /// The course's description.
+    pub description: Option<String>,
+
+    /// The course's website.
+    pub url: Option<Url>,
 }
-
-#[cfg(test)]
-mod tests;

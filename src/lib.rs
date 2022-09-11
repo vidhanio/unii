@@ -9,3 +9,9 @@
 pub mod config;
 /// Types and implementations related to courses.
 pub mod course;
+mod error;
+
+pub use error::Error;
+
+/// A convinient result type for this crate.
+pub type Result<T, E = Error> = std::result::Result<T, E>;
