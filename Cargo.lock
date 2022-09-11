@@ -590,6 +590,7 @@ dependencies = [
  "clap",
  "color-eyre",
  "dirs",
+ "once_cell",
  "regex",
  "serde",
  "serde_regex",
