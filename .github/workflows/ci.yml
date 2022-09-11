@@ -10,18 +10,18 @@ on:
 
 jobs:
   build:
-    name: Build 🛠️
+    name: Build
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout 🛎️
-      - uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v3
 
-      - name: Install Nix 📦
+      - name: Install Nix
         uses: cachix/install-nix-action@v17
 
-      - name: Run `nix flake check` 🧪
+      - name: Run `nix flake check`
         run: nix flake check
 
-      - name: Run `nix build` 🏗️
+      - name: Run `nix build`
         run: nix build
