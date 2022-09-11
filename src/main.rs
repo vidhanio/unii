@@ -78,37 +78,37 @@ fn main() -> eyre::Result<()> {
     };
 
     match args.subcommand {
-        Subcommand::Course(CourseSubcommand::Create {
-            code,
-            name,
-            description,
-            url,
-        }) => {
-            Course::create(
-                &config,
-                &code,
-                Some(Information {
-                    name,
-                    description,
-                    url,
-                }),
-            )?;
+        Subcommand::Course(subcommand) => match subcommand {
+            CourseSubcommand::Create {
+                code,
+                name,
+                description,
+                url,
+            } => {
+                Course::create(
+                    &config,
+                    &code,
+                    Some(Information {
+                        name,
+                        description,
+                        url,
+                    }),
+                )?;
 
-            println!("created course `{code}`");
+                println!("created course `{code}`");
 
-            Ok(())
-        }
-        Subcommand::Course(CourseSubcommand::Delete { code }) => {
-            Course::open(&config, &code)?
-                .ok_or_else(|| eyre::eyre!("course `{code}` does not exist"))?
-                .delete(&config)?;
+                Ok(())
+            }
+            CourseSubcommand::Delete { code } => {
+                Course::open(&config, &code)?
+                    .ok_or_else(|| eyre::eyre!("course `{code}` does not exist"))?
+                    .delete(&config)?;
 
-            println!("deleted course `{code}`");
+                println!("deleted course `{code}`");
 
-            Ok(())
-        }
-        Subcommand::Course(CourseSubcommand::List) => {
-            Course::list(&config)?.try_for_each(|course| {
+                Ok(())
+            }
+            CourseSubcommand::List => Course::list(&config)?.try_for_each(|course| {
                 let course = course?;
 
                 print!("{}", course.code());
@@ -120,7 +120,7 @@ fn main() -> eyre::Result<()> {
                     .map_or_else(|| println!(), |name| println!(" ({})", name));
 
                 Ok(())
-            })
-        }
+            }),
+        },
     }
 }
