@@ -10,6 +10,8 @@ pub mod config;
 /// Types and implementations related to courses.
 pub mod course;
 mod error;
+/// Types and implementations related to notes.
+pub mod note;
 
 pub use error::Error;
 
