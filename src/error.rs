@@ -2,32 +2,28 @@ use std::io;
 
 use thiserror::Error;
 
-/// An enum of errors that can occur.
-#[derive(Error, Debug)]
+/// An error that can occur in this crate
+#[derive(Debug, Error)]
 pub enum Error {
-    /// An io error occurred.
+    /// A course already exists
+    #[error("course with code already exists: {0}")]
+    CourseAlreadyExists(String),
+
+    /// An IO error
     #[error("io error")]
     Io(#[from] io::Error),
 
-    /// A toml serialization error occurred.
+    /// A config error
+    #[error("config error")]
+    Config(#[from] config::ConfigError),
+
+    /// A TOML serialization error
     #[error("toml serialization error")]
-    Ser(#[from] toml::ser::Error),
+    TomlSer(#[from] toml::ser::Error),
 
-    /// A toml deserialization error occurred.
+    /// A TOML deserialization error
     #[error("toml deserialization error")]
-    De(#[from] toml::de::Error),
-
-    /// The course already exists.
-    #[error("course with code `{0}` already exists")]
-    CourseAlreadyExists(String),
-
-    /// The course did not match the regex.
-    #[error("course code `{code}` did not match regex `{regex}`")]
-    CourseCodeDidNotMatchRegex {
-        /// Course code which failed to match regex.
-        code: String,
-
-        /// Regex which the course code failed to match.
-        regex: String,
-    },
+    TomlDe(#[from] toml::de::Error),
 }
+
+pub type Result<T> = std::result::Result<T, Error>;

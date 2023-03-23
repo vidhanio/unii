@@ -8,16 +8,19 @@ homepage = "https://github.com/vidhanio/unii"
 repository = "https://github.com/vidhanio/unii"
 license = "AGPL-3.0"
 categories = ["command-line-utilities"]
+keywords = ["cli", "work", "command-line"]
 
 
 [dependencies]
-clap = { version = "3.2.23", features = ["derive"] }
+clap = { version = "4.1.11", features = ["derive"] }
 color-eyre = "0.6.2"
-dirs = "4.0.0"
-once_cell = "1.15.0"
-regex = "1.6.0"
-serde = { version = "1.0.147", features = ["derive"] }
+config = "0.13.3"
+dirs = "5.0.0"
+once_cell = "1.17.1"
+regex = "1.7.2"
+serde = { version = "1.0.158", features = ["derive"] }
 serde_regex = "1.1.0"
-thiserror = "1.0.37"
-toml = "0.5.9"
+thiserror = "1.0.40"
+time = { version = "0.3.20", features = ["serde"] }
+toml = "0.7.3"
 url = { version = "2.3.1", features = ["serde"] }
