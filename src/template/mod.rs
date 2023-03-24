@@ -1,6 +1,6 @@
 mod list;
 mod new;
-mod run;
+mod render;
 mod types;
 
 use clap::Parser;
@@ -18,22 +18,22 @@ pub struct Args {
 #[derive(Parser)]
 enum Command {
     /// Create a new course
-    #[clap(alias = "create", alias = "add")]
+    #[clap(aliases = ["create", "add"])]
     New(new::Args),
 
-    /// Run an item from a template
-    #[clap(alias = "use")]
-    Run(run::Args),
+    /// Render a template
+    #[clap(aliases = ["generate", "gen", "run", "use", "make"])]
+    Render(render::Args),
 
     /// List all templates
-    #[clap(alias = "ls")]
+    #[clap(aliases = ["ls"])]
     List(list::Args),
 }
 
-pub fn run(settings: &Settings, args: Args) -> crate::Result<()> {
+pub fn run(settings: &Settings, args: Args) -> color_eyre::Result<()> {
     match args.command {
         Command::New(args) => new::run(settings, args),
-        Command::Run(args) => run::run(settings, args),
+        Command::Render(args) => render::run(settings, args),
         Command::List(args) => list::run(settings, args),
     }
 }

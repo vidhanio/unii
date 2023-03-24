@@ -6,7 +6,7 @@ use crate::Settings;
 #[derive(Parser)]
 pub struct Args {}
 
-pub fn run(settings: &Settings, _: Args) -> crate::Result<()> {
+pub fn run(settings: &Settings, _: Args) -> color_eyre::Result<()> {
     for course in Course::all(settings)? {
         println!("{}", course?.code());
     }

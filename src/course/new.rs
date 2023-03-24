@@ -13,7 +13,7 @@ pub struct Args {
     name: Option<String>,
 }
 
-pub fn run(settings: &Settings, args: Args) -> crate::Result<()> {
+pub fn run(settings: &Settings, args: Args) -> color_eyre::Result<()> {
     let course = match args.name {
         Some(name) => Course::new(settings, args.course_code, name)?,
         None => Course::from_code(settings, args.course_code)?,

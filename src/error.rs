@@ -1,5 +1,3 @@
-use std::io;
-
 use thiserror::Error;
 
 /// An error that can occur in this crate
@@ -18,12 +16,8 @@ pub enum Error {
     TemplateAlreadyExists(String),
 
     /// A template does not exist
-    #[error("template does not exist: {0}")]
-    TemplateDoesNotExist(String),
-
-    /// A template directory already exists
-    #[error("template directory already exists: {0}")]
-    TemplateDirectoryAlreadyExists(String),
+    #[error("template does not exist: {}{1}", .0.clone().map(|s| format!("{s}:")).unwrap_or_default())]
+    TemplateDoesNotExist(Option<String>, String),
 
     /// A template context parameter does not exist
     #[error("template context parameter does not exist: {0}")]
@@ -37,21 +31,11 @@ pub enum Error {
     #[error("template command failed: {0}\n{1}")]
     TemplateCommandFailed(String, String),
 
-    /// An IO error
-    #[error("io error")]
-    Io(#[from] io::Error),
+    /// A render already exists
+    #[error("render already exists: {0}")]
+    RenderAlreadyExists(String),
 
-    /// A config error
-    #[error("config error")]
-    Config(#[from] config::ConfigError),
-
-    /// A YAML error
-    #[error("yaml error")]
-    TomlSer(#[from] serde_yaml::Error),
-
-    /// A tinytemplate error
-    #[error("tinytemplate error")]
-    TinyTemplate(#[from] tinytemplate::error::Error),
+    /// A course code was not provided
+    #[error("course code was not provided to render template into (use `CODE:TEMPLATE` or `--course CODE`)")]
+    TemplateCourseCodeMissing,
 }
-
-pub type Result<T> = std::result::Result<T, Error>;

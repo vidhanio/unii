@@ -13,7 +13,7 @@ pub struct Args {
     pluralized_name: Option<String>,
 }
 
-pub fn run(settings: &Settings, args: Args) -> crate::Result<()> {
+pub fn run(settings: &Settings, args: Args) -> color_eyre::Result<()> {
     let template = Template::from_name(settings, args.name, args.pluralized_name)?;
 
     println!("Created template: {}", template.name());

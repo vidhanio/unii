@@ -19,7 +19,6 @@ use std::path::PathBuf;
 use clap::Parser;
 
 use self::course::Course;
-use self::error::Result;
 use self::settings::{Settings, DEFAULT_COURSES_DIR, DEFAULT_SETTINGS_FILE};
 
 pub use self::error::Error;
@@ -54,7 +53,7 @@ enum Command {
 ///
 /// This function will return an error if parsing the command line arguments fails,
 /// if the settings file cannot be opened or created, or if the command fails.
-pub fn run() -> crate::Result<()> {
+pub fn run() -> color_eyre::Result<()> {
     let args = Args::parse();
     let settings = Settings {
         path: args.courses_dir,

@@ -29,7 +29,7 @@ impl Template {
         settings: &Settings,
         name: String,
         pluralized_name: Option<String>,
-    ) -> crate::Result<Self> {
+    ) -> color_eyre::Result<Self> {
         let pluralized_name = pluralized_name.unwrap_or_else(|| format!("{name}s"));
 
         let template = Self {
@@ -46,11 +46,11 @@ impl Template {
         Ok(template)
     }
 
-    pub fn create(&self, settings: &Settings) -> crate::Result<()> {
+    pub fn create(&self, settings: &Settings) -> color_eyre::Result<()> {
         let path = self.path(settings);
 
         if path.exists() {
-            return Err(Error::TemplateAlreadyExists(self.name.clone()));
+            Err(Error::TemplateAlreadyExists(self.name.clone()))?;
         }
 
         fs::create_dir_all(settings.template_dir())?;
@@ -58,18 +58,18 @@ impl Template {
         self.write(settings)
     }
 
-    pub fn write(&self, settings: &Settings) -> crate::Result<()> {
+    pub fn write(&self, settings: &Settings) -> color_eyre::Result<()> {
         fs::write(self.path(settings), serde_yaml::to_string(&self)?)?;
 
         Ok(())
     }
 
-    pub fn open(settings: &Settings, name: &str) -> crate::Result<Option<Self>> {
-        let path = settings
-            .path
-            .join("templates")
-            .join(name)
-            .with_extension("yml");
+    pub fn open(
+        settings: &Settings,
+        source: Option<&Course>,
+        name: &str,
+    ) -> color_eyre::Result<Option<Self>> {
+        let path = settings.template_path(source, name);
 
         if !path.exists() {
             return Ok(None);
@@ -80,25 +80,23 @@ impl Template {
         Ok(Some(serde_yaml::from_str(&yaml)?))
     }
 
-    pub fn run(
+    pub fn render(
         &self,
         settings: &Settings,
         course: &Course,
         context: &HashMap<String, serde_json::Value>,
-    ) -> crate::Result<()> {
+    ) -> color_eyre::Result<()> {
         let tt = self.tiny_template()?;
 
         let rendered_directory_name = tt.render(&self.directory_name, &context)?;
 
         let directory = course
-            .path(settings)
+            .dir(settings)
             .join(&self.pluralized_name)
             .join(&rendered_directory_name);
 
         if directory.exists() {
-            return Err(Error::TemplateDirectoryAlreadyExists(
-                rendered_directory_name,
-            ));
+            Err(Error::RenderAlreadyExists(rendered_directory_name))?;
         }
 
         fs::create_dir_all(&directory)?;
@@ -112,10 +110,10 @@ impl Template {
             .output()?;
 
         if !output.status.success() {
-            return Err(Error::TemplateCommandFailed(
+            Err(Error::TemplateCommandFailed(
                 rendered_command,
                 String::from_utf8_lossy(&output.stderr).to_string(),
-            ));
+            ))?;
         }
 
         let rendered_files = self
@@ -127,7 +125,7 @@ impl Template {
 
                 Ok((rendered_path, rendered_content))
             })
-            .collect::<crate::Result<Vec<_>>>()?;
+            .collect::<color_eyre::Result<Vec<_>>>()?;
 
         for (path, content) in rendered_files {
             let full_path = directory.join(path);
@@ -144,7 +142,7 @@ impl Template {
 
     pub fn all(
         settings: &Settings,
-    ) -> crate::Result<impl Iterator<Item = crate::Result<Self>> + '_> {
+    ) -> color_eyre::Result<impl Iterator<Item = color_eyre::Result<Self>> + '_> {
         Ok(fs::read_dir(settings.template_dir())?.filter_map(|entry| {
             let path = match entry {
                 Ok(entry) => entry.path(),
@@ -164,11 +162,14 @@ impl Template {
                 return None;
             }
 
-            Some(Self::open(settings, &name).map(|option| option.expect("template should exist")))
+            Some(
+                Self::open(settings, None, &name) // TODO: add source
+                    .map(|option| option.expect("template should exist")),
+            )
         }))
     }
 
-    pub fn tiny_template(&self) -> crate::Result<TinyTemplate> {
+    pub fn tiny_template(&self) -> color_eyre::Result<TinyTemplate> {
         let mut tt = TinyTemplate::new();
 
         tt.set_default_formatter(&tinytemplate::format_unescaped);

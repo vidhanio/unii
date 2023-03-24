@@ -9,5 +9,5 @@
   - [x] `list` (`ls`)
 - [ ] `template`
   - [x] `new` (`create`, `add`)
-  - [x] `run` (`use`)
+  - [x] `render` (`generate`, `gen`, `run`, `use`, `make`)
   - [x] `list` (`ls`)
