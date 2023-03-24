@@ -7,7 +7,7 @@
     missing_docs
 )]
 
-//! unii: A cli university work management tool
+//! unii: A command-line university work management tool.
 
 mod course;
 mod error;
