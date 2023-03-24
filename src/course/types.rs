@@ -2,9 +2,10 @@ use std::{fs, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::{settings::Settings, Error};
+use crate::{Error, Settings};
 
 #[derive(Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct Course {
     #[serde(skip)]
     code: String,
@@ -44,7 +45,7 @@ impl Course {
     }
 
     pub fn write(&self, settings: &Settings) -> crate::Result<()> {
-        fs::write(self.toml_path(settings), toml::to_string(&self)?)?;
+        fs::write(self.yaml_path(settings), serde_yaml::to_string(&self)?)?;
 
         Ok(())
     }
@@ -56,11 +57,11 @@ impl Course {
             return Ok(None);
         }
 
-        let toml = fs::read_to_string(path.join("course.toml"))?;
+        let yaml = fs::read_to_string(path.join("course.yml"))?;
 
         Ok(Some(Self {
             code: code.to_string(),
-            ..toml::from_str(&toml)?
+            ..serde_yaml::from_str(&yaml)?
         }))
     }
 
@@ -77,11 +78,14 @@ impl Course {
                 return None;
             }
 
-            let code = path
-                .file_name()
-                .expect("path should have a file name")
-                .to_string_lossy()
-                .to_string();
+            let code = match path.file_name() {
+                Some(code) => code.to_string_lossy(),
+                None => return None,
+            };
+
+            if !path.join("course.yml").exists() {
+                return None;
+            }
 
             Some(Self::open(settings, &code).map(|option| option.expect("course should exist")))
         }))
@@ -91,27 +95,11 @@ impl Course {
         settings.path.join(&self.code)
     }
 
-    pub fn toml_path(&self, settings: &Settings) -> PathBuf {
-        self.path(settings).join("course.toml")
-    }
-
-    pub fn set_code(&mut self, settings: &Settings, code: String) -> crate::Result<()> {
-        self.code = code;
-
-        self.write(settings)
-    }
-
-    pub fn set_name(&mut self, settings: &Settings, name: String) -> crate::Result<()> {
-        self.name = Some(name);
-
-        self.write(settings)
+    pub fn yaml_path(&self, settings: &Settings) -> PathBuf {
+        self.path(settings).join("course.yml")
     }
 
     pub fn code(&self) -> &str {
         &self.code
-    }
-
-    pub fn name(&self) -> Option<&str> {
-        self.name.as_deref()
     }
 }

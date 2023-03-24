@@ -1,12 +1,13 @@
 mod list;
 mod new;
+mod run;
 mod types;
 
 use clap::Parser;
 
-use crate::Settings;
+pub use self::types::Template;
 
-pub use self::types::Course;
+use crate::Settings;
 
 #[derive(Parser)]
 pub struct Args {
@@ -20,7 +21,11 @@ enum Command {
     #[clap(alias = "create", alias = "add")]
     New(new::Args),
 
-    /// List all courses
+    /// Run an item from a template
+    #[clap(alias = "use")]
+    Run(run::Args),
+
+    /// List all templates
     #[clap(alias = "ls")]
     List(list::Args),
 }
@@ -28,6 +33,7 @@ enum Command {
 pub fn run(settings: &Settings, args: Args) -> crate::Result<()> {
     match args.command {
         Command::New(args) => new::run(settings, args),
+        Command::Run(args) => run::run(settings, args),
         Command::List(args) => list::run(settings, args),
     }
 }

@@ -12,31 +12,40 @@
 mod course;
 mod error;
 mod settings;
+mod template;
 
 use std::path::PathBuf;
 
 use clap::Parser;
 
+use self::course::Course;
 use self::error::Result;
-use self::settings::{Settings, DEFAULT_SETTINGS_FILE};
+use self::settings::{Settings, DEFAULT_COURSES_DIR, DEFAULT_SETTINGS_FILE};
 
 pub use self::error::Error;
 
 #[derive(Parser)]
-#[command(author, version, about)]
+#[command(author, version, about, long_about = None)]
 struct Args {
     #[command(subcommand)]
     command: Command,
 
     /// The path to the settings file
-    #[clap(short, long, default_value = DEFAULT_SETTINGS_FILE.as_os_str())]
+    #[clap(long, default_value = DEFAULT_SETTINGS_FILE.as_os_str())]
     settings_file: PathBuf,
+
+    /// The path to the directory where courses are stored
+    #[clap(long, default_value = DEFAULT_COURSES_DIR.as_os_str())]
+    courses_dir: PathBuf,
 }
 
 #[derive(Parser)]
 enum Command {
     /// Manage courses
     Course(course::Args),
+
+    /// Manage templates
+    Template(template::Args),
 }
 
 /// Main entrypoint to the cli.
@@ -47,9 +56,13 @@ enum Command {
 /// if the settings file cannot be opened or created, or if the command fails.
 pub fn run() -> crate::Result<()> {
     let args = Args::parse();
-    let settings = Settings::open_or_create_default_at(&args.settings_file)?;
+    let settings = Settings {
+        path: args.courses_dir,
+    }
+    .open_or_create_at(&args.settings_file)?;
 
     match args.command {
         Command::Course(args) => course::run(&settings, args),
+        Command::Template(args) => template::run(&settings, args),
     }
 }
