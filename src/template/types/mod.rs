@@ -1,3 +1,5 @@
+mod file_tree;
+
 use std::{
     collections::HashMap, fmt::Write, fs, path::PathBuf, process::Command, string::ToString,
 };
@@ -17,6 +19,7 @@ pub struct Template {
 
     context_parameters: Vec<String>,
     directory_name: String,
+    #[serde(deserialize_with = "file_tree::deserialize_into_hashmap")]
     files: HashMap<String, String>,
     command: String,
 }
@@ -83,26 +86,13 @@ impl Template {
         course: &Course,
         context: &HashMap<String, serde_json::Value>,
     ) -> crate::Result<()> {
-        let mut tt = TinyTemplate::new();
+        let tt = self.tiny_template()?;
 
-        tt.set_default_formatter(&tinytemplate::format_unescaped);
-        tt.add_formatter("PascalCase", |v, s| {
-            let pascal = match v {
-                serde_json::Value::String(s) => s.to_pascal_case(),
-                _ => {
-                    return tinytemplate::format_unescaped(v, s);
-                }
-            };
-
-            write!(s, "{pascal}").map_err(Into::into)
-        });
-
-        tt.add_template(&self.directory_name, &self.directory_name)?;
         let rendered_directory_name = tt.render(&self.directory_name, &context)?;
 
         let directory = course
             .path(settings)
-            .join(self.pluralized_name())
+            .join(&self.pluralized_name)
             .join(&rendered_directory_name);
 
         if directory.exists() {
@@ -111,24 +101,9 @@ impl Template {
             ));
         }
 
-        tt.add_template(&self.command, &self.command)?;
-        let rendered_command = tt.render(&self.command, &context)?;
-
-        let rendered_files = &self
-            .files
-            .iter()
-            .map(|(path, content)| {
-                tt.add_template(path, path)?;
-                tt.add_template(content, content)?;
-
-                let rendered_path = tt.render(path, &context)?;
-                let rendered_content = tt.render(content, &context)?;
-
-                Ok((rendered_path, rendered_content))
-            })
-            .collect::<crate::Result<Vec<_>>>()?;
-
         fs::create_dir_all(&directory)?;
+
+        let rendered_command = tt.render(&self.command, &context)?;
 
         let output = Command::new("sh")
             .arg("-c")
@@ -142,6 +117,17 @@ impl Template {
                 String::from_utf8_lossy(&output.stderr).to_string(),
             ));
         }
+
+        let rendered_files = self
+            .files
+            .iter()
+            .map(|(path, content)| {
+                let rendered_path = tt.render(path, &context)?;
+                let rendered_content = tt.render(content, &context)?;
+
+                Ok((rendered_path, rendered_content))
+            })
+            .collect::<crate::Result<Vec<_>>>()?;
 
         for (path, content) in rendered_files {
             let full_path = directory.join(path);
@@ -182,6 +168,33 @@ impl Template {
         }))
     }
 
+    pub fn tiny_template(&self) -> crate::Result<TinyTemplate> {
+        let mut tt = TinyTemplate::new();
+
+        tt.set_default_formatter(&tinytemplate::format_unescaped);
+        tt.add_formatter("PascalCase", |v, s| {
+            let pascal = match v {
+                serde_json::Value::String(s) => s.to_pascal_case(),
+                _ => {
+                    return tinytemplate::format_unescaped(v, s);
+                }
+            };
+
+            write!(s, "{pascal}").map_err(Into::into)
+        });
+
+        tt.add_template(&self.directory_name, &self.directory_name)?;
+
+        tt.add_template(&self.command, &self.command)?;
+
+        for (path, content) in &self.files {
+            tt.add_template(path, path)?;
+            tt.add_template(content, content)?;
+        }
+
+        Ok(tt)
+    }
+
     pub fn path(&self, settings: &Settings) -> PathBuf {
         settings
             .path
@@ -192,10 +205,6 @@ impl Template {
 
     pub fn name(&self) -> &str {
         &self.name
-    }
-
-    pub fn pluralized_name(&self) -> &str {
-        &self.pluralized_name
     }
 
     pub fn context_parameters(&self) -> &[String] {
