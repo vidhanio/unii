@@ -1,12 +1,14 @@
 mod file_tree;
 
-use std::{
-    collections::HashMap, fmt::Write, fs, path::PathBuf, process::Command, string::ToString,
-};
+use std::{collections::HashMap, fs, path::PathBuf, process::Command, string::ToString};
 
-use heck::ToPascalCase;
+use heck::{
+    ToKebabCase, ToLowerCamelCase, ToShoutyKebabCase, ToShoutySnakeCase, ToSnakeCase, ToTrainCase,
+    ToUpperCamelCase,
+};
 use serde::{Deserialize, Serialize};
-use tinytemplate::TinyTemplate;
+use serde_json::Value;
+use tera::{Context, Tera};
 
 use crate::{Course, Error, Settings};
 
@@ -84,34 +86,36 @@ impl Template {
         &self,
         settings: &Settings,
         course: &Course,
-        context: &HashMap<String, serde_json::Value>,
+        context: &HashMap<String, Value>,
     ) -> color_eyre::Result<()> {
-        let tt = self.tiny_template()?;
+        let mut tera = Self::tera();
+        let context = Context::from_serialize(context)?;
+        let mut render = |s: &str| tera.render_str(s, &context);
 
-        let rendered_directory_name = tt.render(&self.directory_name, &context)?;
+        let directory_name = render(&self.directory_name)?;
 
         let directory = course
             .dir(settings)
             .join(&self.pluralized_name)
-            .join(&rendered_directory_name);
+            .join(&directory_name);
 
         if directory.exists() {
-            Err(Error::RenderAlreadyExists(rendered_directory_name))?;
+            Err(Error::RenderAlreadyExists(directory_name))?;
         }
 
         fs::create_dir_all(&directory)?;
 
-        let rendered_command = tt.render(&self.command, &context)?;
+        let command = render(&self.command)?;
 
         let output = Command::new("sh")
             .arg("-c")
-            .arg(&rendered_command)
+            .arg(&command)
             .current_dir(&directory)
             .output()?;
 
         if !output.status.success() {
             Err(Error::TemplateCommandFailed(
-                rendered_command,
+                command,
                 String::from_utf8_lossy(&output.stderr).to_string(),
             ))?;
         }
@@ -120,8 +124,8 @@ impl Template {
             .files
             .iter()
             .map(|(path, content)| {
-                let rendered_path = tt.render(path, &context)?;
-                let rendered_content = tt.render(content, &context)?;
+                let rendered_path = render(path)?;
+                let rendered_content = render(content)?;
 
                 Ok((rendered_path, rendered_content))
             })
@@ -138,6 +142,71 @@ impl Template {
         }
 
         Ok(())
+    }
+
+    fn tera() -> Tera {
+        type Case = fn(&str) -> String;
+
+        let mut tt = Tera::default();
+
+        let cases: &[(&[_], Case)] = &[
+            (
+                &["UpperCamelCase", "PascalCase"],
+                ToUpperCamelCase::to_upper_camel_case,
+            ),
+            (
+                &["lowerCamelCase", "camelCase"],
+                ToLowerCamelCase::to_lower_camel_case,
+            ),
+            (
+                &["snake_case", "lower_snake_case"],
+                ToSnakeCase::to_snake_case,
+            ),
+            (
+                &["kebab-case", "lower-kebab-case"],
+                ToKebabCase::to_kebab_case,
+            ),
+            (
+                &[
+                    "SHOUTY_SNAKE_CASE",
+                    "UPPER_SNAKE_CASE",
+                    "SCREAMING_SNAKE_CASE",
+                ],
+                ToShoutySnakeCase::to_shouty_snake_case,
+            ),
+            (
+                &[
+                    "shouty-kebab-case",
+                    "upper-kebab-case",
+                    "screaming-kebab-case",
+                ],
+                ToShoutyKebabCase::to_shouty_kebab_case,
+            ),
+            (
+                &["Train-Case", "Title-Kebab-Case"],
+                ToTrainCase::to_train_case,
+            ),
+        ];
+
+        for (names, case) in cases {
+            for name in *names {
+                tt.register_filter(
+                    name,
+                    Box::new(move |value: &Value, args: &HashMap<String, Value>| {
+                        let value = tera::try_get_value!(name, "value", String, value);
+                        if !args.is_empty() {
+                            return Err(
+                                format!("Filter `{name}` does not accept any arguments").into()
+                            );
+                        }
+
+                        Ok(Value::String(case(&value)))
+                    }),
+                );
+            }
+        }
+
+        tt
     }
 
     pub fn all(
@@ -167,33 +236,6 @@ impl Template {
                     .map(|option| option.expect("template should exist")),
             )
         }))
-    }
-
-    pub fn tiny_template(&self) -> color_eyre::Result<TinyTemplate> {
-        let mut tt = TinyTemplate::new();
-
-        tt.set_default_formatter(&tinytemplate::format_unescaped);
-        tt.add_formatter("PascalCase", |v, s| {
-            let pascal = match v {
-                serde_json::Value::String(s) => s.to_pascal_case(),
-                _ => {
-                    return tinytemplate::format_unescaped(v, s);
-                }
-            };
-
-            write!(s, "{pascal}").map_err(Into::into)
-        });
-
-        tt.add_template(&self.directory_name, &self.directory_name)?;
-
-        tt.add_template(&self.command, &self.command)?;
-
-        for (path, content) in &self.files {
-            tt.add_template(path, path)?;
-            tt.add_template(content, content)?;
-        }
-
-        Ok(tt)
     }
 
     pub fn path(&self, settings: &Settings) -> PathBuf {
